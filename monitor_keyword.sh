@@ -11,13 +11,13 @@ KNOWN_DOMAINS_FILE="known_domains.txt"                          # 已知最终�
 
 # 检查环境变量是否设置
 if [[ -z "$URLS" || -z "$KEYWORDS" || -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
-  echo "请在青龙面板上设置环境变量：URLS、KEYWORDS、INTERVAL（可选）、BOT_TOKEN 和 CHAT_ID"
+  echo "请在青龙面板上设置环境变量: URLS、KEYWORDS、INTERVAL（可选）、BOT_TOKEN 和 CHAT_ID"
   exit 1
 fi
 
 # 检查文件是否存在
 if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
-  echo "错误：文件 $KNOWN_DOMAINS_FILE 不存在，请创建并填入已知域名。"
+  echo "错误: 文件 $KNOWN_DOMAINS_FILE 不存在，请创建并填入已知域名。"
   exit 1
 fi
 
@@ -31,13 +31,13 @@ readarray -t DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
 
 # 确保 URL 和关键词数量匹配
 if [ "${#URL_ARRAY[@]}" -ne "${#KEYWORD_ARRAY[@]}" ]; then
-  echo "错误：URL 和关键词数量不匹配，请确保 URLS 和 KEYWORDS 中的项数相同。"
+  echo "错误: URL 和关键词数量不匹配，请确保 URLS 和 KEYWORDS 中的项数相同。"
   exit 1
 fi
 
 # 确保通知机器人的 ID 和 TOKEN 数量匹配
 if [ "${#CHAT_ID_ARRAY[@]}" -ne "${#BOT_TOKEN_ARRAY[@]}" ]; then
-  echo "错误：URL 和关键词数量不匹配，请确保 YGN_USER_ID 和 YGN_BOT_TOKEN 中的项数相同。"
+  echo "错误: URL 和关键词数量不匹配，请确保 YGN_USER_ID 和 YGN_BOT_TOKEN 中的项数相同。"
   exit 1
 fi
 
@@ -49,6 +49,7 @@ KEYWORD_PRESENT_COUNT=()
 KEYWORD_ABSENT_COUNT=()
 KEYWORD_RECOVERY_NOTIFICATION_SENT=()
 NEW_DOMAIN_NOTIFICATION_TIME=()
+DAILY_NOTIFICATION_SENT=0
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   FAIL_COUNT_ARRAY[i]=0
@@ -87,17 +88,17 @@ formatted_response=$(echo "$response" | jq -r '[
 ] | .[]')
 
 # 输出查询结果
-echo "当前 IP 归属地信息："
+echo "当前 IP 归属地信息: "
 echo "$formatted_response"
 echo ""
 
 # 输出当前检测的域名
-echo "已知最终跳转后域名列表："
+echo "已知最终跳转后域名列表: "
 for domain in "${DOMAIN_ARRAY[@]}"; do
   echo "$domain"
 done
 echo ""
-echo "即将检测的 URL 和对应的域名："
+echo "即将检测的 URL 和对应的域名: "
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   URL=${URL_ARRAY[i]}
   FINAL_URL=$(curl -Ls -o /dev/null -w %{url_effective} "$URL")
@@ -105,7 +106,7 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   echo "监测网址: $((i + 1))"
   echo "原始地址: $URL"
   echo "最终跳转后域名: $DOMAIN"
-  echo "监测关键词：${KEYWORD_ARRAY[i]}"
+  echo "监测关键词: ${KEYWORD_ARRAY[i]}"
   echo ""
 done
 
@@ -129,25 +130,25 @@ for ((j=0; j<${#BOT_TOKEN_ARRAY[@]}; j++)); do
 echo "------------------------"
 echo "$message"
 echo
-echo "当前 IP 归属地信息："
+echo "当前 IP 归属地信息: "
 echo "$ip_info"
 echo "------------------------"
   curl -s -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
        -d chat_id="${CHAT_ID_ARRAY[j]}" \
        -d text="$message
 
-当前 IP 归属地信息：
+当前 IP 归属地信息: 
 $ip_info"
 done   
 }
 
 # 每日统计发送
 send_daily_summary() {
-  local message="每日监测统计：
+  local message="每日监测统计: 
 "
   for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
     message+="第 $((i + 1)) 个 URL ${URL_ARRAY[i]}:
-监测到关键词：${KEYWORD_PRESENT_COUNT[i]} 次，未检测到关键词：${KEYWORD_ABSENT_COUNT[i]} 次"
+监测到关键词: ${KEYWORD_PRESENT_COUNT[i]} 次，未检测到关键词: ${KEYWORD_ABSENT_COUNT[i]} 次"
     KEYWORD_PRESENT_COUNT[i]=0  # 重置计数
     KEYWORD_ABSENT_COUNT[i]=0    # 重置计数
   done
@@ -172,7 +173,7 @@ check_and_notify_new_domain() {
   
   # 如果是新域名且第一次发现，或超过半小时没有发送通知
   if [[ $is_known -eq 0 && ($((current_time - NEW_DOMAIN_NOTIFICATION_TIME[index])) -ge 1800 || ${NEW_DOMAIN_NOTIFICATION_TIME[index]} -eq 0) ]]; then
-    send_telegram_notification "注意：检测到新的域名 '$current_domain'，请手动更新已知域名列表。"
+    send_telegram_notification "注意: 检测到新的域名 '$current_domain'，请手动更新已知域名列表。"
     NEW_DOMAIN_NOTIFICATION_TIME[index]=$current_time  # 更新最后发送通知时间
   fi
 }
@@ -197,18 +198,18 @@ while true; do
       
       # 检查是否需要发送恢复通知
       if [[ "${KEYWORD_RECOVERY_NOTIFICATION_SENT[i]}" -eq 1 ]]; then
-        send_telegram_notification "恢复：$NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。"
+        send_telegram_notification "恢复: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。"
         KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=0  # 重置恢复通知状态
       fi
     else
-      echo "警告：关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
+      echo "警告: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
       FAIL_COUNT_ARRAY[i]=$((FAIL_COUNT_ARRAY[i] + 1))  # 增加计数器
       KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
       
       # 检查是否连续三次失败
       if [ "${FAIL_COUNT_ARRAY[i]}" -ge 3 ]; then
         echo "连续三次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "警告：$NOW_DOMAIN 连续三次检测不到关键词 '$KEYWORD'。"
+        send_telegram_notification "警告: $NOW_DOMAIN 连续三次检测不到关键词 '$KEYWORD'。"
         FAIL_COUNT_ARRAY[i]=0  # 发送通知后重置计数器
         KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=1  # 标记为已发送无关键词通知
       fi
@@ -218,10 +219,18 @@ while true; do
     check_and_notify_new_domain "$i" "$NOW_DOMAIN"
   done
 
-  # 检查当前时间是否与每日通知时间一致
-  if [[ "$(date +%H:%M)" == "$DAILY_NOTIFICATION_TIME" ]]; then
+  # 获取当前时间
+  CURRENT_TIME=$(date +%H:%M)
+  
+  # 如果当前时间与每日通知时间一致且尚未发送每日通知
+  if [[ "$CURRENT_TIME" == "$DAILY_NOTIFICATION_TIME" && $DAILY_NOTIFICATION_SENT -eq 0 ]]; then
     send_daily_summary  # 发送每日统计
-    sleep 60  # 防止在一分钟内多次发送
+    DAILY_NOTIFICATION_SENT=1  # 设置已发送标志
+  fi
+  
+  # 如果是新的一天（即时间重置到 00:00），重置发送标志
+  if [[ "$CURRENT_TIME" == "00:00" ]]; then
+    DAILY_NOTIFICATION_SENT=0
   fi
 
   # 等待指定的时间间隔
