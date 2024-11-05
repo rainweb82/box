@@ -4,7 +4,7 @@
 URLS=${URLS}                                                    # 监测链接（用换行分隔）
 KEYWORDS=${KEYWORDS}                                            # 链接中需要包含的关键词（用换行分隔）
 INTERVAL=${INTERVAL:-60}                                        # 默认检查间隔为60秒
-DAILY_NOTIFICATION_TIME=${DAILY_NOTIFICATION_TIME:-"10:00"}     # 默认通知时间为10:00
+DAILY_NOTIFICATION_TIME=${DAILY_NOTIFICATION_TIME:-"09:00"}     # 默认通知时间为09:00
 BOT_TOKEN=${YGN_BOT_TOKENS}                                     # TG通知机器人token（用换行分隔）
 CHAT_ID=${YGN_USER_IDS}                                         # TG通知机器人id（用换行分隔）
 KNOWN_DOMAINS_FILE="known_domains.txt"                          # 已知最终跳转域名列表（用换行分隔）
@@ -49,7 +49,9 @@ KEYWORD_PRESENT_COUNT=()
 KEYWORD_ABSENT_COUNT=()
 KEYWORD_RECOVERY_NOTIFICATION_SENT=()
 NEW_DOMAIN_NOTIFICATION_TIME=()
-DAILY_NOTIFICATION_SENT=0
+DAILY_NOTIFICATION_SENT=0  # 标志变量，记录是否已发送当日统计
+LAST_NOTIFICATION_DATE=""  # 记录上次发送统计通知的日期
+STARTUP_DONE=0  # 标志是否为脚本首次启动
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   FAIL_COUNT_ARRAY[i]=0
@@ -78,7 +80,7 @@ get_domain() {
 }
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
-response=$(curl -s https://ipinfo.io)
+response=$(curl --max-time 30 -s https://ipinfo.io)
 formatted_response=$(echo "$response" | jq -r '[
   "IP地址: " + .ip,
   "国家: " + .country,
@@ -101,7 +103,7 @@ echo ""
 echo "即将检测的 URL 和对应的域名: "
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   URL=${URL_ARRAY[i]}
-  FINAL_URL=$(curl -Ls -o /dev/null -w %{url_effective} "$URL")
+  FINAL_URL=$(curl -Ls --max-time 30 -o /dev/null -w %{url_effective} "$URL")
   DOMAIN=$(get_domain "$FINAL_URL")
   echo "监测网址: $((i + 1))"
   echo "原始地址: $URL"
@@ -111,7 +113,7 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
 done
 
 get_ip_info() {
-  local response=$(curl -s https://ipinfo.io)
+  local response=$(curl --max-time 30 -s https://ipinfo.io)
   local formatted_response=$(echo "$response" | jq -r '[
     "IP地址: " + .ip,
     "国家: " + .country,
@@ -133,7 +135,7 @@ echo
 echo "当前 IP 归属地信息: "
 echo "$ip_info"
 echo "------------------------"
-  curl -s -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
+  curl -s --max-time 30 -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
        -d chat_id="${CHAT_ID_ARRAY[j]}" \
        -d text="$message
 
@@ -187,8 +189,8 @@ while true; do
     printf "$(date +%H:%M:%S) 检查中... | "
 
     # 获取最终跳转后的 URL 和网页内容
-    FINAL_URL=$(curl -Ls -o /dev/null -w %{url_effective} "$URL")
-    content=$(curl -s -L "$FINAL_URL")
+    FINAL_URL=$(curl --max-time 30 -Ls -o /dev/null -w %{url_effective} "$URL")
+    content=$(curl --max-time 30 -s -L "$FINAL_URL")
     NOW_DOMAIN=$(get_domain "$FINAL_URL")
 
     if echo "$content" | grep -q "$KEYWORD"; then
@@ -219,18 +221,20 @@ while true; do
     check_and_notify_new_domain "$i" "$NOW_DOMAIN"
   done
 
-  # 获取当前时间
+  # 获取当前时间和日期
   CURRENT_TIME=$(date +%H:%M)
-  
-  # 如果当前时间与每日通知时间一致且尚未发送每日通知
-  if [[ "$CURRENT_TIME" == "$DAILY_NOTIFICATION_TIME" && $DAILY_NOTIFICATION_SENT -eq 0 ]]; then
-    send_daily_summary  # 发送每日统计
-    DAILY_NOTIFICATION_SENT=1  # 设置已发送标志
+  TODAY_DATE=$(date +%Y-%m-%d)
+
+
+  # 在首次启动时跳过每日通知
+  if [[ $STARTUP_DONE -eq 0 ]]; then
+    STARTUP_DONE=1  # 标记脚本已启动，跳过首次通知
   fi
-  
-  # 如果是新的一天（即时间重置到 00:00），重置发送标志
-  if [[ "$CURRENT_TIME" == "00:00" ]]; then
-    DAILY_NOTIFICATION_SENT=0
+
+  # 如果当前时间等于或超过每日通知时间，并且今天还没发过每日统计
+  if [[ "$CURRENT_TIME" == "$DAILY_NOTIFICATION_TIME" && "$LAST_NOTIFICATION_DATE" != "$TODAY_DATE" ]]; then
+    send_daily_summary  # 发送每日统计
+    LAST_NOTIFICATION_DATE="$TODAY_DATE"  # 更新上次发送日期
   fi
 
   # 等待指定的时间间隔
