@@ -84,7 +84,7 @@ get_domain() {
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
 response=$(curl --max-time 30 -s https://ipinfo.io)
 formatted_response=$(echo "$response" | jq -r '[
-  "IP地址: " + .ip,
+  #"IP地址: " + .ip,
   "国家: " + .country,
   "城市: " + (.city // "未知"),
   "地区: " + (.region // "未知"),
@@ -113,7 +113,7 @@ done
 get_ip_info() {
   local response=$(curl --max-time 30 -s https://ipinfo.io)
   local formatted_response=$(echo "$response" | jq -r '[
-    "IP地址: " + .ip,
+    #"IP地址: " + .ip,
     "国家: " + .country,
     "城市: " + (.city // "未知"),
     "地区: " + (.region // "未知"),
