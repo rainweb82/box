@@ -7,6 +7,7 @@ INTERVAL=${INTERVAL:-60}                                        # 默认检查�
 DAILY_NOTIFICATION_TIME=${DAILY_NOTIFICATION_TIME:-"09:00"}     # 默认通知时间为09:00
 BOT_TOKEN=${YGN_BOT_TOKENS}                                     # TG通知机器人token（用换行分隔）
 CHAT_ID=${YGN_USER_IDS}                                         # TG通知机器人id（用换行分隔）
+NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}  # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                          # 已知最终跳转域名列表（用换行分隔）
 
 # 检查环境变量是否设置
@@ -52,6 +53,7 @@ NEW_DOMAIN_NOTIFICATION_TIME=()
 DAILY_NOTIFICATION_SENT=0  # 标志变量，记录是否已发送当日统计
 LAST_NOTIFICATION_DATE=""  # 记录上次发送统计通知的日期
 STARTUP_DONE=0  # 标志是否为脚本首次启动
+NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   FAIL_COUNT_ARRAY[i]=0
@@ -102,12 +104,8 @@ done
 echo ""
 echo "即将检测的 URL 和对应的域名: "
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
-  URL=${URL_ARRAY[i]}
-  FINAL_URL=$(curl -Ls --max-time 30 -o /dev/null -w %{url_effective} "$URL")
-  DOMAIN=$(get_domain "$FINAL_URL")
   echo "监测网址: $((i + 1))"
-  echo "原始地址: $URL"
-  echo "最终跳转后域名: $DOMAIN"
+  echo "原始地址: ${URL_ARRAY[i]}"
   echo "监测关键词: ${KEYWORD_ARRAY[i]}"
   echo ""
 done
@@ -162,8 +160,10 @@ check_and_notify_new_domain() {
   local index=$1
   local current_domain=$2
   local current_time=$(date +%s)
+
   # 将新的域名列表文件内容重新读入数组
   readarray -t DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
+
   # 检查域名是否在已知列表中
   local is_known=0
   for domain in "${DOMAIN_ARRAY[@]}"; do
@@ -172,16 +172,43 @@ check_and_notify_new_domain() {
       break
     fi
   done
-  
-  # 如果是新域名且第一次发现，或超过半小时没有发送通知
-  if [[ $is_known -eq 0 && ($((current_time - NEW_DOMAIN_NOTIFICATION_TIME[index])) -ge 1800 || ${NEW_DOMAIN_NOTIFICATION_TIME[index]} -eq 0) ]]; then
-    send_telegram_notification "注意: 检测到新的域名 '$current_domain'，请手动更新已知域名列表。"
+
+  # 如果是新域名
+  if [[ $is_known -eq 0 ]]; then
+    # 将新域名添加到待通知列表
+    if [[ ! " ${NEW_DOMAINS_TO_NOTIFY[*]} " =~ " ${current_domain} " ]]; then
+      NEW_DOMAINS_TO_NOTIFY+=("$current_domain")
+    fi
+  fi
+
+  # 检查是否需要发送新域名通知
+  if [[ $is_known -eq 0 && ($((current_time - NEW_DOMAIN_NOTIFICATION_TIME[index])) -ge $NEW_DOMAIN_NOTIFICATION_INTERVAL || ${NEW_DOMAIN_NOTIFICATION_TIME[index]} -eq 0) ]]; then
+    # 如果是新域名且第一次发现，或超过半小时没有发送通知
+    local domains_to_notify="${NEW_DOMAINS_TO_NOTIFY[*]}"
+    NEW_DOMAINS_TO_NOTIFY=()  # 清空待通知列表
+    send_telegram_notification "注意: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。"
     NEW_DOMAIN_NOTIFICATION_TIME[index]=$current_time  # 更新最后发送通知时间
   fi
 }
 
+update_known_domains_list() {
+  # 重新读取已知域名列表
+  readarray -t UPDATED_DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
+  # 从 NEW_DOMAINS_TO_NOTIFY 列表中移除已存在于已知域名列表的域名
+  for updated_domain in "${UPDATED_DOMAIN_ARRAY[@]}"; do
+    for i in "${!NEW_DOMAINS_TO_NOTIFY[@]}"; do
+      if [[ "${NEW_DOMAINS_TO_NOTIFY[i]}" == "$updated_domain" ]]; then
+        unset 'NEW_DOMAINS_TO_NOTIFY[i]'
+      fi
+    done
+  done
+  # 重新索引 NEW_DOMAINS_TO_NOTIFY 列表
+  NEW_DOMAINS_TO_NOTIFY=("${NEW_DOMAINS_TO_NOTIFY[@]}")
+}
+
 # 持续监测每个 URL 的关键词和最终地址变化
 while true; do
+start_time=$(date +%s)  # 记录当前时间（秒）
   for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
     URL=${URL_ARRAY[i]}
     KEYWORD=${KEYWORD_ARRAY[i]}
@@ -204,7 +231,7 @@ while true; do
         KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=0  # 重置恢复通知状态
       fi
     else
-      echo "警告: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
+      echo "[警告]: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
       FAIL_COUNT_ARRAY[i]=$((FAIL_COUNT_ARRAY[i] + 1))  # 增加计数器
       KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
       
@@ -225,7 +252,6 @@ while true; do
   CURRENT_TIME=$(date +%H:%M)
   TODAY_DATE=$(date +%Y-%m-%d)
 
-
   # 在首次启动时跳过每日通知
   if [[ $STARTUP_DONE -eq 0 ]]; then
     STARTUP_DONE=1  # 标记脚本已启动，跳过首次通知
@@ -237,6 +263,19 @@ while true; do
     LAST_NOTIFICATION_DATE="$TODAY_DATE"  # 更新上次发送日期
   fi
 
+  # 更新已知域名列表
+  update_known_domains_list
+
+  # 计算等待时间，确保每次间隔是准确的
+  end_time=$(date +%s)
+  elapsed_time=$((end_time - start_time))  # 计算所用时间
+
+  total_wait_time=$((INTERVAL - elapsed_time))   # 默认间隔减去每次检测所用时间，避免总的等待时间过长
+  # 如果所花时间超过设定的间隔（极少情况下发生），可以设置一个最小的等待时间，比如 1 秒
+  if [[ $total_wait_time -le 0 ]]; then
+    total_wait_time=1
+  fi
+
   # 等待指定的时间间隔
-  sleep "$INTERVAL"
+  sleep "$total_wait_time"  # 等待调整后的时间
 done
