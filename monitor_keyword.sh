@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # 从环境变量中读取多个 URL 和关键词
-URLS=${URLS}                                                    # 监测链接（用换行分隔）
-KEYWORDS=${KEYWORDS}                                            # 链接中需要包含的关键词（用换行分隔）
-INTERVAL=${INTERVAL:-60}                                        # 默认检查间隔为60秒
-DAILY_NOTIFICATION_TIME=${DAILY_NOTIFICATION_TIME:-"09:00"}     # 默认通知时间为09:00
-BOT_TOKEN=${YGN_BOT_TOKENS}                                     # TG通知机器人token（用换行分隔）
-CHAT_ID=${YGN_USER_IDS}                                         # TG通知机器人id（用换行分隔）
-NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}  # 新域名通知间隔时间，默认30分钟
-KNOWN_DOMAINS_FILE="known_domains.txt"                          # 已知最终跳转域名列表（用换行分隔）
+URLS=${URLS}                                                                   # 监测链接（用换行分隔）
+KEYWORDS=${KEYWORDS}                                                           # 链接中需要包含的关键词（用换行分隔）
+INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
+DAILY_NOTIFICATION_TIME=${DAILY_NOTIFICATION_TIME:-"09:00"}                    # 默认通知时间为09:00
+BOT_TOKEN=${YGN_BOT_TOKENS}                                                    # TG通知机器人token（用换行分隔）
+CHAT_ID=${YGN_USER_IDS}                                                        # TG通知机器人id（用换行分隔）
+NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
+KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
 # 检查环境变量是否设置
 if [[ -z "$URLS" || -z "$KEYWORDS" || -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
@@ -54,6 +54,10 @@ DAILY_NOTIFICATION_SENT=0  # 标志变量，记录是否已发送当日统计
 LAST_NOTIFICATION_DATE=""  # 记录上次发送统计通知的日期
 STARTUP_DONE=0  # 标志是否为脚本首次启动
 NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
+CUMULATIVE_FAIL_COUNT=()  # 初始化累计失败计数数组
+RUN_TIME=$(date +%s)  # 记录脚本的启动时间
+MAX_RUNTIME=86400  # 设置24小时（86400秒）的运行时长
+
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   FAIL_COUNT_ARRAY[i]=0
@@ -63,6 +67,7 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   KEYWORD_ABSENT_COUNT[i]=0
   KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=0
   NEW_DOMAIN_NOTIFICATION_TIME[i]=0
+  CUMULATIVE_FAIL_COUNT[i]=0  # 累计失败计数
 done
 
 # 提取 URL 的一级域名
@@ -147,7 +152,7 @@ send_daily_summary() {
   local message="每日监测统计: 
 "
   for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
-    message+="第 $((i + 1)) 个 URL ${URL_ARRAY[i]}:
+    message+="第 $((i + 1)) 个 URL ${URL_ARRAY[i]}
 监测到关键词: ${KEYWORD_PRESENT_COUNT[i]} 次，未检测到关键词: ${KEYWORD_ABSENT_COUNT[i]} 次"
     KEYWORD_PRESENT_COUNT[i]=0  # 重置计数
     KEYWORD_ABSENT_COUNT[i]=0    # 重置计数
@@ -208,6 +213,14 @@ update_known_domains_list() {
 
 # 持续监测每个 URL 的关键词和最终地址变化
 while true; do
+  # 检查是否超过24小时
+  current_time=$(date +%s)
+  runtime=$((current_time - RUN_TIME))
+  if [ "$runtime" -ge "$MAX_RUNTIME" ]; then
+    echo "脚本已运行24小时，自动结束进程。"
+    exit 0
+  fi
+
 start_time=$(date +%s)  # 记录当前时间（秒）
   for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
     URL=${URL_ARRAY[i]}
@@ -233,14 +246,23 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     else
       echo "[警告]: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
       FAIL_COUNT_ARRAY[i]=$((FAIL_COUNT_ARRAY[i] + 1))  # 增加计数器
+      CUMULATIVE_FAIL_COUNT[i]=$((CUMULATIVE_FAIL_COUNT[i] + 1))  # 增加累计失败计数
       KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
       
-      # 检查是否连续三次失败
+      # 检查是否连续 3 次失败
       if [ "${FAIL_COUNT_ARRAY[i]}" -ge 3 ]; then
         echo "连续三次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "警告: $NOW_DOMAIN 连续三次检测不到关键词 '$KEYWORD'。"
+        send_telegram_notification "严重问题: $NOW_DOMAIN 连续 3 次检测不到关键词 '$KEYWORD'。"
         FAIL_COUNT_ARRAY[i]=0  # 发送通知后重置计数器
+        CUMULATIVE_FAIL_COUNT[i]=0  # 重置累计失败计数器
         KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=1  # 标记为已发送无关键词通知
+      fi
+
+      # 检查是否累计 5 次失败
+      if [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge 5 ]; then
+        echo "累计五次检测不到关键词，发送 Telegram 通知..."
+        send_telegram_notification "提醒: $NOW_DOMAIN 累计 5 次检测不到关键词 '$KEYWORD'。"
+        CUMULATIVE_FAIL_COUNT[i]=0  # 发送通知后重置累计失败计数器
       fi
     fi
 
