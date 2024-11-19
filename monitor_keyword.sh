@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # cron:30 9 * * *
 # new Env("域名检测任务")
 
