@@ -2,8 +2,6 @@
 # cron:30 9 * * *
 # new Env("域名检测任务")
 
-. monitor_keyword.sh
-
 # 从环境变量中读取多个 URL 和关键词
 URLS=${URLS}                                                                   # 监测链接（用换行分隔）
 KEYWORDS=${KEYWORDS}                                                           # 链接中需要包含的关键词（用换行分隔）
