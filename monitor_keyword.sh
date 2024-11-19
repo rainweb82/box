@@ -17,12 +17,6 @@ if [[ -z "$URLS" || -z "$KEYWORDS" || -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
   exit 1
 fi
 
-# 将 URL 和关键词分割成数组
-readarray -t URL_ARRAY <<< "$URLS"
-readarray -t KEYWORD_ARRAY <<< "$KEYWORDS"
-readarray -t CHAT_ID_ARRAY <<< "$CHAT_ID"
-readarray -t BOT_TOKEN_ARRAY <<< "$BOT_TOKEN"
-
 # 确保 URL 和关键词数量匹配
 if [ "${#URL_ARRAY[@]}" -ne "${#KEYWORD_ARRAY[@]}" ]; then
   echo "错误: URL 和关键词数量不匹配，请确保 URLS 和 KEYWORDS 中的项数相同。"
@@ -33,6 +27,29 @@ fi
 if [ "${#CHAT_ID_ARRAY[@]}" -ne "${#BOT_TOKEN_ARRAY[@]}" ]; then
   echo "错误: URL 和关键词数量不匹配，请确保 YGN_USER_ID 和 YGN_BOT_TOKEN 中的项数相同。"
   exit 1
+fi
+
+# 将 URL 和关键词分割成数组
+readarray -t URL_ARRAY <<< "$URLS"
+readarray -t KEYWORD_ARRAY <<< "$KEYWORDS"
+readarray -t CHAT_ID_ARRAY <<< "$CHAT_ID"
+readarray -t BOT_TOKEN_ARRAY <<< "$BOT_TOKEN"
+
+# 检查是否存在 known_domains.txt 文件
+if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
+  echo "警告: 文件 $KNOWN_DOMAINS_FILE 不存在，将跳过新域名的检测。"
+  echo ""
+  CHECK_NEW_DOMAINS_ENABLED=0  # 标志为不执行新域名检测
+else
+  CHECK_NEW_DOMAINS_ENABLED=1  # 标志为允许新域名检测
+  # 读取已知域名到数组
+  readarray -t DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
+  # 打印当前已知域名列表
+  echo "已知最终跳转后域名列表: "
+  for domain in "${DOMAIN_ARRAY[@]}"; do
+    echo "$domain"
+  done
+  echo ""
 fi
 
 # 初始化每个 URL 的失败计数、最终 URL 地址、每日统计计数和恢复通知标记
@@ -62,22 +79,6 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   CUMULATIVE_FAIL_COUNT[i]=0  # 累计失败计数
 done
 
-# 提取 URL 的一级域名
-get_domain() {
-  local url=$1
-  # 提取域名部分
-  local domain=$(echo "$url" | awk -F[/:] '{print $4}')
-  
-  # 使用正则识别一级域名，适应常见的两级和三级域名
-  if [[ "$domain" =~ ([^.]+\.[^.]+\.(com\.cn|net\.cn|org\.cn|gov\.cn|co\.uk|org\.uk|ac\.uk))$ ]]; then
-    # 处理三级域名情况
-    echo "${BASH_REMATCH[0]}"
-  else
-    # 处理两级域名
-    echo "$domain" | awk -F. '{print $(NF-1)"."$NF}'
-  fi
-}
-
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
 response=$(curl --max-time 30 -s https://ipinfo.io)
 formatted_response=$(echo "$response" | jq -r '[
@@ -93,23 +94,6 @@ echo "当前 IP 归属地信息: "
 echo "$formatted_response"
 echo ""
 
-# 检查是否存在 known_domains.txt 文件
-if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
-  echo "警告: 文件 $KNOWN_DOMAINS_FILE 不存在，将跳过新域名的检测。"
-  echo ""
-  CHECK_NEW_DOMAINS_ENABLED=0  # 标志为不执行新域名检测
-else
-  CHECK_NEW_DOMAINS_ENABLED=1  # 标志为允许新域名检测
-  # 读取已知域名到数组
-  readarray -t DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
-  # 打印当前已知域名列表
-  echo "已知最终跳转后域名列表: "
-  for domain in "${DOMAIN_ARRAY[@]}"; do
-    echo "$domain"
-  done
-  echo ""
-fi
-
 # 输出当前检测的域名
 echo "即将检测的 URL 和对应的域名: "
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
@@ -118,6 +102,22 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   echo "监测关键词: ${KEYWORD_ARRAY[i]}"
   echo ""
 done
+
+# 提取 URL 的一级域名
+get_domain() {
+  local url=$1
+  # 提取域名部分
+  local domain=$(echo "$url" | awk -F[/:] '{print $4}')
+  
+  # 使用正则识别一级域名，适应常见的两级和三级域名
+  if [[ "$domain" =~ ([^.]+\.[^.]+\.(com\.cn|net\.cn|org\.cn|gov\.cn|co\.uk|org\.uk|ac\.uk))$ ]]; then
+    # 处理三级域名情况
+    echo "${BASH_REMATCH[0]}"
+  else
+    # 处理两级域名
+    echo "$domain" | awk -F. '{print $(NF-1)"."$NF}'
+  fi
+}
 
 get_ip_info() {
   local response=$(curl --max-time 30 -s https://ipinfo.io)
