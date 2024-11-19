@@ -17,19 +17,11 @@ if [[ -z "$URLS" || -z "$KEYWORDS" || -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
   exit 1
 fi
 
-# 检查文件是否存在
-if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
-  echo "错误: 文件 $KNOWN_DOMAINS_FILE 不存在，请创建并填入已知域名。"
-  exit 1
-fi
-
 # 将 URL 和关键词分割成数组
 readarray -t URL_ARRAY <<< "$URLS"
 readarray -t KEYWORD_ARRAY <<< "$KEYWORDS"
 readarray -t CHAT_ID_ARRAY <<< "$CHAT_ID"
 readarray -t BOT_TOKEN_ARRAY <<< "$BOT_TOKEN"
-# 将域名列表文件内容读入数组
-readarray -t DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
 
 # 确保 URL 和关键词数量匹配
 if [ "${#URL_ARRAY[@]}" -ne "${#KEYWORD_ARRAY[@]}" ]; then
@@ -58,7 +50,6 @@ NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
 CUMULATIVE_FAIL_COUNT=()  # 初始化累计失败计数数组
 RUN_TIME=$(date +%s)  # 记录脚本的启动时间
 MAX_RUNTIME=86300  # 设置24小时（86400秒）的运行时长
-
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   FAIL_COUNT_ARRAY[i]=0
@@ -102,12 +93,24 @@ echo "当前 IP 归属地信息: "
 echo "$formatted_response"
 echo ""
 
+# 检查是否存在 known_domains.txt 文件
+if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
+  echo "警告: 文件 $KNOWN_DOMAINS_FILE 不存在，将跳过新域名的检测。"
+  echo ""
+  CHECK_NEW_DOMAINS_ENABLED=0  # 标志为不执行新域名检测
+else
+  CHECK_NEW_DOMAINS_ENABLED=1  # 标志为允许新域名检测
+  # 读取已知域名到数组
+  readarray -t DOMAIN_ARRAY < "$KNOWN_DOMAINS_FILE"
+  # 打印当前已知域名列表
+  echo "已知最终跳转后域名列表: "
+  for domain in "${DOMAIN_ARRAY[@]}"; do
+    echo "$domain"
+  done
+  echo ""
+fi
+
 # 输出当前检测的域名
-echo "已知最终跳转后域名列表: "
-for domain in "${DOMAIN_ARRAY[@]}"; do
-  echo "$domain"
-done
-echo ""
 echo "即将检测的 URL 和对应的域名: "
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   echo "监测网址: $((i + 1))"
@@ -269,12 +272,12 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       fi
     fi
 
-    # 检查是否有新的域名
-    check_and_notify_new_domain "$i" "$NOW_DOMAIN"
+    # 检查是否需要新域名检测
+    if [[ $CHECK_NEW_DOMAINS_ENABLED -eq 1 ]]; then
+      check_and_notify_new_domain "$i" "$NOW_DOMAIN"
+      update_known_domains_list  # 更新已知域名列表
+    fi
   done
-
-  # 更新已知域名列表
-  update_known_domains_list
 
   # 计算等待时间，确保每次间隔是准确的
   end_time=$(date +%s)
