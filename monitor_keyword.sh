@@ -1,10 +1,13 @@
 #!/bin/bash
+# cron:30 9 * * *
+# new Env("域名检测任务")
+
+. monitor_keyword.sh
 
 # 从环境变量中读取多个 URL 和关键词
 URLS=${URLS}                                                                   # 监测链接（用换行分隔）
 KEYWORDS=${KEYWORDS}                                                           # 链接中需要包含的关键词（用换行分隔）
 INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
-DAILY_NOTIFICATION_TIME=${DAILY_NOTIFICATION_TIME:-"09:00"}                    # 默认通知时间为09:00
 BOT_TOKEN=${YGN_BOT_TOKENS}                                                    # TG通知机器人token（用换行分隔）
 CHAT_ID=${YGN_USER_IDS}                                                        # TG通知机器人id（用换行分隔）
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
@@ -56,7 +59,7 @@ STARTUP_DONE=0  # 标志是否为脚本首次启动
 NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
 CUMULATIVE_FAIL_COUNT=()  # 初始化累计失败计数数组
 RUN_TIME=$(date +%s)  # 记录脚本的启动时间
-MAX_RUNTIME=86400  # 设置24小时（86400秒）的运行时长
+MAX_RUNTIME=86300  # 设置24小时（86400秒）的运行时长
 
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
@@ -217,7 +220,9 @@ while true; do
   current_time=$(date +%s)
   runtime=$((current_time - RUN_TIME))
   if [ "$runtime" -ge "$MAX_RUNTIME" ]; then
-    echo "脚本已运行24小时，自动结束进程。"
+    send_daily_summary  # 发送每日统计
+    sleep "5"
+    echo "脚本已运行24小时，自动结束进程。请等待定时任务自动重启进程。"
     exit 0
   fi
 
@@ -269,21 +274,6 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     # 检查是否有新的域名
     check_and_notify_new_domain "$i" "$NOW_DOMAIN"
   done
-
-  # 获取当前时间和日期
-  CURRENT_TIME=$(date +%H:%M)
-  TODAY_DATE=$(date +%Y-%m-%d)
-
-  # 在首次启动时跳过每日通知
-  if [[ $STARTUP_DONE -eq 0 ]]; then
-    STARTUP_DONE=1  # 标记脚本已启动，跳过首次通知
-  fi
-
-  # 如果当前时间等于或超过每日通知时间，并且今天还没发过每日统计
-  if [[ "$CURRENT_TIME" == "$DAILY_NOTIFICATION_TIME" && "$LAST_NOTIFICATION_DATE" != "$TODAY_DATE" ]]; then
-    send_daily_summary  # 发送每日统计
-    LAST_NOTIFICATION_DATE="$TODAY_DATE"  # 更新上次发送日期
-  fi
 
   # 更新已知域名列表
   update_known_domains_list
