@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cron:30 9 * * *
+# cron:0 30 9 * * *
 # new Env("域名检测任务")
 
 # 从环境变量中读取多个 URL 和关键词
