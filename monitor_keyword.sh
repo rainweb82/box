@@ -8,8 +8,8 @@ KEYWORDS=${KEYWORDS}                                                           #
 BOT_TOKEN=${YGN_BOT_TOKENS}                                                    # TG通知机器人token（用换行分隔）
 CHAT_ID=${YGN_USER_IDS}                                                        # TG通知机器人id（用换行分隔）
 INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
-FAIL_COUNT=${INTERVAL:-3}                                                       # 连续错误触发通知次数，默认3次
-CUMULATIVE_FAIL=${INTERVAL:-5}                                                  # 累计错误触发通知次数，默认5次
+FAIL_COUNT=${INTERVAL:-3}                                                      # 连续错误触发通知次数，默认3次
+CUMULATIVE_FAIL=${INTERVAL:-5}                                                 # 累计错误触发通知次数，默认5次
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
