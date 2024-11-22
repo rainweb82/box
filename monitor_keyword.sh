@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# cron:0 0 11 * * *
+# cron:0 30 9 * * *
 # new Env("域名检测任务")
 
 # 从环境变量中读取多个 URL 和关键词
 URLS=${URLS}                                                                   # 监测链接（用换行分隔）
 KEYWORDS=${KEYWORDS}                                                           # 链接中需要包含的关键词（用换行分隔）
-INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
 BOT_TOKEN=${YGN_BOT_TOKENS}                                                    # TG通知机器人token（用换行分隔）
 CHAT_ID=${YGN_USER_IDS}                                                        # TG通知机器人id（用换行分隔）
+INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
+FAIL_COUNT=${INTERVAL:-3}                                                       # 连续错误触发通知次数，默认3次
+CUMULATIVE_FAIL=${INTERVAL:-5}                                                  # 累计错误触发通知次数，默认5次
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
 # 检查环境变量是否设置
 if [[ -z "$URLS" || -z "$KEYWORDS" || -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
-  echo "请在青龙面板上设置环境变量: URLS、KEYWORDS、INTERVAL（可选）、BOT_TOKEN 和 CHAT_ID"
+  echo "请在青龙面板上设置环境变量: URLS、KEYWORDS、BOT_TOKEN 和 CHAT_ID"
   exit 1
 fi
 
@@ -67,6 +69,7 @@ NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
 CUMULATIVE_FAIL_COUNT=()  # 初始化累计失败计数数组
 RUN_TIME=$(date +%s)  # 记录脚本的启动时间
 MAX_RUNTIME=86300  # 设置24小时（86400秒）的运行时长
+RECOVERY_NOTIFICATION_SENT_BY_DOMAIN=()  # 恢复通知标志（按域名区分）
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   FAIL_COUNT_ARRAY[i]=0
@@ -77,12 +80,13 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=0
   NEW_DOMAIN_NOTIFICATION_TIME[i]=0
   CUMULATIVE_FAIL_COUNT[i]=0  # 累计失败计数
+  RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]=""
 done
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
 response=$(curl --max-time 30 -s https://ipinfo.io)
 formatted_response=$(echo "$response" | jq -r '[
-  #"IP地址: " + .ip,
+  "IP地址: " + .ip,
   "国家: " + .country,
   "城市: " + (.city // "未知"),
   "地区: " + (.region // "未知"),
@@ -97,7 +101,7 @@ echo ""
 # 输出当前检测的域名
 echo "即将检测的 URL 和对应的域名: "
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
-  echo "监测网址: $((i + 1))"
+  echo "监测网址: URL$((i + 1))"
   echo "原始地址: ${URL_ARRAY[i]}"
   echo "监测关键词: ${KEYWORD_ARRAY[i]}"
   echo ""
@@ -120,9 +124,14 @@ get_domain() {
 }
 
 get_ip_info() {
+
   local response=$(curl --max-time 30 -s https://ipinfo.io)
-  local formatted_response=$(echo "$response" | jq -r '[
-    #"IP地址: " + .ip,
+  local ip=$(echo "$response" | jq -r '.ip')
+  # 替换 IP 地址的最后一段为 "*"
+  local masked_ip=$(echo "$ip" | awk -F. '{print $1"."$2"."$3".*"}')
+
+  local formatted_response=$(echo "$response" | jq -r --arg masked_ip "$masked_ip" '[
+    "IP地址: " + $masked_ip,
     "国家: " + .country,
     "城市: " + (.city // "未知"),
     "地区: " + (.region // "未知"),
@@ -195,7 +204,7 @@ check_and_notify_new_domain() {
     # 如果是新域名且第一次发现，或超过半小时没有发送通知
     local domains_to_notify="${NEW_DOMAINS_TO_NOTIFY[*]}"
     NEW_DOMAINS_TO_NOTIFY=()  # 清空待通知列表
-    send_telegram_notification "注意: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。"
+    send_telegram_notification "【注意】: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。"
     NEW_DOMAIN_NOTIFICATION_TIME[index]=$current_time  # 更新最后发送通知时间
   fi
 }
@@ -232,7 +241,7 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     URL=${URL_ARRAY[i]}
     KEYWORD=${KEYWORD_ARRAY[i]}
     
-    printf "$(date +%H:%M:%S) 检查中... | "
+    printf "$(date +%H:%M:%S) 检查 URL$((i + 1)) ... | "
 
     # 获取最终跳转后的 URL 和网页内容
     FINAL_URL=$(curl --max-time 30 -Ls -o /dev/null -w %{url_effective} "$URL")
@@ -244,31 +253,36 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       FAIL_COUNT_ARRAY[i]=0  # 重置计数器
       KEYWORD_PRESENT_COUNT[i]=$((KEYWORD_PRESENT_COUNT[i] + 1))  # 有关键词计数
       
-      # 检查是否需要发送恢复通知
-      if [[ "${KEYWORD_RECOVERY_NOTIFICATION_SENT[i]}" -eq 1 ]]; then
-        send_telegram_notification "恢复: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。"
-        KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=0  # 重置恢复通知状态
+      # 检查是否需要发送恢复通知（按域名）
+      if [[ "${RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]}" == *"$NOW_DOMAIN"* ]]; then
+        send_telegram_notification "【恢复】: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。"
+        # 从恢复通知标志中移除当前域名
+        RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]=$(echo "${RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]}" | sed "s/$NOW_DOMAIN,//g")
       fi
     else
       echo "[警告]: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
       FAIL_COUNT_ARRAY[i]=$((FAIL_COUNT_ARRAY[i] + 1))  # 增加计数器
       CUMULATIVE_FAIL_COUNT[i]=$((CUMULATIVE_FAIL_COUNT[i] + 1))  # 增加累计失败计数
       KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
-      
+
       # 检查是否连续 3 次失败
-      if [ "${FAIL_COUNT_ARRAY[i]}" -ge 3 ]; then
-        echo "连续三次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "严重问题: $NOW_DOMAIN 连续 3 次检测不到关键词 '$KEYWORD'。"
-        FAIL_COUNT_ARRAY[i]=0  # 发送通知后重置计数器
-        CUMULATIVE_FAIL_COUNT[i]=0  # 重置累计失败计数器
-        KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=1  # 标记为已发送无关键词通知
+      if [ "${FAIL_COUNT_ARRAY[i]}" -ge $FAIL_COUNT ]; then
+        echo "连续 $FAIL_COUNT 次检测不到关键词，发送 Telegram 通知..."
+        send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 $FAIL_COUNT 次检测不到关键词 '$KEYWORD'。"
       fi
 
       # 检查是否累计 5 次失败
-      if [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge 5 ]; then
-        echo "累计五次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "提醒: $NOW_DOMAIN 累计 5 次检测不到关键词 '$KEYWORD'。"
+      if [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge $CUMULATIVE_FAIL ]; then
+        echo "累计 $CUMULATIVE_FAIL 次检测不到关键词，发送 Telegram 通知..."
+        send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 $CUMULATIVE_FAIL 次检测不到关键词 '$KEYWORD'。"
+      fi
+
+      # 发送通知后重置计数
+      if [ "${FAIL_COUNT_ARRAY[i]}" -ge $FAIL_COUNT ] || [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge $CUMULATIVE_FAIL ]; then
+        FAIL_COUNT_ARRAY[i]=0  # 发送通知后重置计数器
         CUMULATIVE_FAIL_COUNT[i]=0  # 发送通知后重置累计失败计数器
+        KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=1  # 标记为已发送无关键词通知
+        RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]+="$NOW_DOMAIN,"
       fi
     fi
 
