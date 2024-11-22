@@ -143,21 +143,28 @@ get_ip_info() {
 # 发送 Telegram 通知的函数
 send_telegram_notification() {
   local message=$1
+
+  # 检查是否填写 BOT_TOKEN 和 CHAT_ID
+  if [[ -z "$BOT_TOKEN_ARRAY" || -z "$CHAT_ID_ARRAY" ]]; then
+    echo "错误: 未填写 BOT_TOKEN 或 CHAT_ID，无法发送 Telegram 通知。"
+    return
+  fi
+
   local ip_info=$(get_ip_info)
-for ((j=0; j<${#BOT_TOKEN_ARRAY[@]}; j++)); do
-echo "------------------------"
-echo "$message"
-echo
-echo "当前 IP 归属地信息: "
-echo "$ip_info"
-echo "------------------------"
-  curl -s --max-time 30 -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
-       -d chat_id="${CHAT_ID_ARRAY[j]}" \
-       -d text="$message
+  for ((j=0; j<${#BOT_TOKEN_ARRAY[@]}; j++)); do
+  echo "------------------------"
+  echo "$message"
+  echo
+  echo "当前 IP 归属地信息: "
+  echo "$ip_info"
+  echo "------------------------"
+    curl -s --max-time 30 -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
+         -d chat_id="${CHAT_ID_ARRAY[j]}" \
+         -d text="$message
 
 当前 IP 归属地信息: 
 $ip_info"
-done   
+  done   
 }
 
 # 每日统计发送
