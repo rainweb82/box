@@ -158,9 +158,9 @@ send_telegram_notification() {
   echo "当前 IP 归属地信息: "
   echo "$ip_info"
   echo "------------------------"
-    curl -s --max-time 30 -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
-         -d chat_id="${CHAT_ID_ARRAY[j]}" \
-         -d text="$message
+  curl -s --max-time 30 -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
+       -d chat_id="${CHAT_ID_ARRAY[j]}" \
+       -d text="$message
 
 当前 IP 归属地信息: 
 $ip_info"
