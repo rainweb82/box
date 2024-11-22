@@ -146,7 +146,7 @@ send_telegram_notification() {
 
   # 检查是否填写 BOT_TOKEN 和 CHAT_ID
   if [[ -z "$BOT_TOKEN_ARRAY" || -z "$CHAT_ID_ARRAY" ]]; then
-    echo "错误: 未填写 BOT_TOKEN 或 CHAT_ID，无法发送 Telegram 通知。"
+    echo "未填写 BOT_TOKEN 或 CHAT_ID，无法发送 Telegram 通知。"
     return
   fi
 
