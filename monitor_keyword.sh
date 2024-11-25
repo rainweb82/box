@@ -149,7 +149,14 @@ send_telegram_notification() {
     echo "未填写 BOT_TOKEN 或 CHAT_ID，无法发送 Telegram 通知。"
     return
   fi
-
+  
+  # 提取域名并检查是否为 .com 结尾
+  local domain=$(echo "$message" | grep -Eo 'https?://[^/]*' | sed 's|https\?://||g')
+  if [[ "$domain" =~ \.com$ ]]; then
+    echo "检测到域名 '$domain' 为 .com 结尾，跳过发送通知。"
+    return
+  fi
+  
   local ip_info=$(get_ip_info)
   for ((j=0; j<${#BOT_TOKEN_ARRAY[@]}; j++)); do
   #echo "------------------------"
