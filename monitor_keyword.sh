@@ -143,6 +143,7 @@ get_ip_info() {
 # 发送 Telegram 通知的函数
 send_telegram_notification() {
   local message=$1
+  local force_send=${2:-false}  # 第二个参数控制是否强制发送
 
   # 检查是否填写 BOT_TOKEN 和 CHAT_ID
   if [[ -z "$BOT_TOKEN_ARRAY" || -z "$CHAT_ID_ARRAY" ]]; then
@@ -150,11 +151,13 @@ send_telegram_notification() {
     return
   fi
   
-  # 提取域名并检查是否为 .xyz 结尾
-  local domain=$(echo "$message" | grep -Eo 'https?://[^/]*' | sed 's|https\?://||g')
-  if [[ ! "$domain" =~ \.xyz$ ]]; then
-    echo "检测到域名 '$domain' 不为 .xyz 结尾，跳过发送通知。"
-    return
+  # 如果不是强制发送，检查域名是否为 .xyz 结尾
+  if [[ "$force_send" == "false" ]]; then
+    local domain=$(echo "$message" | grep -Eo 'https?://[^/]*' | sed 's|https\?://||g')
+    if [[ ! "$domain" =~ \.xyz$ ]]; then
+      echo "检测到域名 '$domain' 不为 .xyz 结尾，跳过发送通知。"
+      return
+    fi
   fi
   
   local ip_info=$(get_ip_info)
@@ -184,7 +187,7 @@ send_daily_summary() {
     KEYWORD_PRESENT_COUNT[i]=0  # 重置计数
     KEYWORD_ABSENT_COUNT[i]=0    # 重置计数
   done
-  send_telegram_notification "$message"
+  send_telegram_notification "$message" true
 }
 
 # 检查是否存在不在域名列表中的新域名
