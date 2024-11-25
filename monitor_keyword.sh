@@ -12,6 +12,8 @@ FAIL_COUNT=${FAIL_COUNT:-3}                                                    #
 CUMULATIVE_FAIL=${CUMULATIVE_FAIL:-5}                                          # 累计错误触发通知次数，默认5次
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
+ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}  # 如果未设置，则为空字符串
+
 
 # 检查环境变量是否设置
 if [[ -z "$URLS" || -z "$KEYWORDS" ]]; then
@@ -36,6 +38,7 @@ readarray -t URL_ARRAY <<< "$URLS"
 readarray -t KEYWORD_ARRAY <<< "$KEYWORDS"
 readarray -t CHAT_ID_ARRAY <<< "$CHAT_ID"
 readarray -t BOT_TOKEN_ARRAY <<< "$BOT_TOKEN"
+IFS=',' read -r -a ALLOWED_SUFFIX_ARRAY <<< "$ALLOWED_SUFFIXES"  # 将后缀转换为数组
 
 # 检查是否存在 known_domains.txt 文件
 if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
@@ -151,12 +154,23 @@ send_telegram_notification() {
     return
   fi
   
-  # 如果不是强制发送，检查域名是否为 .xyz 结尾
+  # 如果不是强制发送，检查域名是否符合允许的后缀
   if [[ "$force_send" == "false" ]]; then
     local domain=$(echo "$message" | grep -Eo 'https?://[^/]*' | sed 's|https\?://||g')
-    if [[ ! "$domain" =~ \.xyz$ ]]; then
-      echo "检测到域名 '$domain' 不为 .xyz 结尾，跳过发送通知。"
-      return
+
+    # 如果设置了后缀限制，执行判断逻辑
+    if [[ "${#ALLOWED_SUFFIX_ARRAY[@]}" -gt 0 ]]; then
+      local is_allowed=0
+      for suffix in "${ALLOWED_SUFFIX_ARRAY[@]}"; do
+        if [[ "$domain" == *"$suffix" ]]; then
+          is_allowed=1
+          break
+        fi
+      done
+      if [[ $is_allowed -eq 0 ]]; then
+        echo "检测到域名 '$domain' 不符合允许的后缀，跳过发送通知。"
+        return
+      fi
     fi
   fi
   
