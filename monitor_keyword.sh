@@ -38,7 +38,7 @@ readarray -t URL_ARRAY <<< "$URLS"
 readarray -t KEYWORD_ARRAY <<< "$KEYWORDS"
 readarray -t CHAT_ID_ARRAY <<< "$CHAT_ID"
 readarray -t BOT_TOKEN_ARRAY <<< "$BOT_TOKEN"
-IFS=',' read -r -a ALLOWED_SUFFIX_ARRAY <<< "$ALLOWED_SUFFIXES"  # 将后缀转换为数组
+readarray -t ALLOWED_SUFFIX_ARRAY <<< "$ALLOWED_SUFFIXES"  # 将后缀转换为数组
 
 # 检查是否存在 known_domains.txt 文件
 if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
@@ -146,7 +146,8 @@ get_ip_info() {
 # 发送 Telegram 通知的函数
 send_telegram_notification() {
   local message=$1
-  local force_send=${2:-false}  # 第二个参数控制是否强制发送
+  local domain=$2  # 接收域名参数
+  local force_send=${3:-false}  # 第二个参数控制是否强制发送
 
   # 检查是否填写 BOT_TOKEN 和 CHAT_ID
   if [[ -z "$BOT_TOKEN_ARRAY" || -z "$CHAT_ID_ARRAY" ]]; then
@@ -162,7 +163,7 @@ send_telegram_notification() {
     if [[ "${#ALLOWED_SUFFIX_ARRAY[@]}" -gt 0 ]]; then
       local is_allowed=0
       for suffix in "${ALLOWED_SUFFIX_ARRAY[@]}"; do
-        if [[ "$domain" == *"$suffix" ]]; then
+        if [[ "$domain" == *".$suffix" ]]; then
           is_allowed=1
           break
         fi
@@ -201,7 +202,7 @@ send_daily_summary() {
     KEYWORD_PRESENT_COUNT[i]=0  # 重置计数
     KEYWORD_ABSENT_COUNT[i]=0    # 重置计数
   done
-  send_telegram_notification "$message" true
+  send_telegram_notification "$message" "$domain" true
 }
 
 # 检查是否存在不在域名列表中的新域名
@@ -235,7 +236,7 @@ check_and_notify_new_domain() {
     # 如果是新域名且第一次发现，或超过半小时没有发送通知
     local domains_to_notify="${NEW_DOMAINS_TO_NOTIFY[*]}"
     NEW_DOMAINS_TO_NOTIFY=()  # 清空待通知列表
-    send_telegram_notification "【注意】: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。"
+    send_telegram_notification "【注意】: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。" "$domains_to_notify"
     NEW_DOMAIN_NOTIFICATION_TIME[index]=$current_time  # 更新最后发送通知时间
   fi
 }
@@ -286,7 +287,7 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       
       # 检查是否需要发送恢复通知（按域名）
       if [[ "${RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]}" == *"$NOW_DOMAIN"* ]]; then
-        send_telegram_notification "【恢复】: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。"
+        send_telegram_notification "【恢复】: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。" "$NOW_DOMAIN"
         # 从恢复通知标志中移除当前域名
         RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]=$(echo "${RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]}" | sed "s/$NOW_DOMAIN,//g")
       fi
@@ -299,13 +300,13 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       # 检查是否连续 3 次失败
       if [ "${FAIL_COUNT_ARRAY[i]}" -ge $FAIL_COUNT ]; then
         echo "连续 $FAIL_COUNT 次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 $FAIL_COUNT 次检测不到关键词 '$KEYWORD'。"
+        send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 $FAIL_COUNT 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
       fi
 
       # 检查是否累计 5 次失败
       if [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge $CUMULATIVE_FAIL ]; then
         echo "累计 $CUMULATIVE_FAIL 次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 $CUMULATIVE_FAIL 次检测不到关键词 '$KEYWORD'。"
+        send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 $CUMULATIVE_FAIL 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
       fi
 
       # 发送通知后重置计数
