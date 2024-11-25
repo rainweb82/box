@@ -150,10 +150,10 @@ send_telegram_notification() {
     return
   fi
   
-  # 提取域名并检查是否为 .com 结尾
+  # 提取域名并检查是否为 .xyz 结尾
   local domain=$(echo "$message" | grep -Eo 'https?://[^/]*' | sed 's|https\?://||g')
-  if [[ "$domain" =~ \.com$ ]]; then
-    echo "检测到域名 '$domain' 为 .com 结尾，跳过发送通知。"
+  if [[ ! "$domain" =~ \.xyz$ ]]; then
+    echo "检测到域名 '$domain' 不为 .xyz 结尾，跳过发送通知。"
     return
   fi
   
