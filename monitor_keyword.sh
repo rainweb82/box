@@ -100,6 +100,15 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   echo ""
 done
 
+# 输出允许通知域名后缀列表
+if [[ -n "$ALLOWED_SUFFIXES" ]]; then
+  echo "允许发送失败通知的域名后缀: "
+  for ((i=0; i<${#ALLOWED_SUFFIXES[@]}; i++)); do
+    echo ".${ALLOWED_SUFFIXES[i]}"
+  done
+  echo ""
+fi
+
 # 提取 URL 的一级域名
 get_domain() {
   local url=$1
@@ -323,4 +332,3 @@ start_time=$(date +%s)  # 记录当前时间（秒）
   # 等待指定的时间间隔
   sleep "$total_wait_time"  # 等待调整后的时间
 done
-
