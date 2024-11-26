@@ -5,8 +5,8 @@
 # 从环境变量中读取多个 URL 和关键词
 URLS=${URLS}                                                                   # 监测链接（用换行分隔）
 KEYWORDS=${KEYWORDS}                                                           # 链接中需要包含的关键词（用换行分隔）
-BOT_TOKEN=${YGN_BOT_TOKENS}                                                    # TG通知机器人token（用换行分隔）
-CHAT_ID=${YGN_USER_IDS}                                                        # TG通知机器人id（用换行分隔）
+BOT_TOKEN=${MONITOR_BOT_TOKENS}                                                # TG通知机器人token（用换行分隔）
+CHAT_ID=${MONITOR_USER_IDS}                                                    # TG通知机器人id（用换行分隔）
 INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
 FAIL_COUNT=${FAIL_COUNT:-3}                                                    # 连续错误触发通知次数，默认3次
 CUMULATIVE_FAIL=${CUMULATIVE_FAIL:-5}                                          # 累计错误触发通知次数，默认5次
@@ -32,7 +32,7 @@ fi
 
 # 确保通知机器人的 ID 和 TOKEN 数量匹配
 if [ "${#CHAT_ID_ARRAY[@]}" -ne "${#BOT_TOKEN_ARRAY[@]}" ]; then
-  echo "错误: URL 和关键词数量不匹配，请确保 YGN_USER_ID 和 YGN_BOT_TOKEN 中的项数相同。"
+  echo "错误: URL 和关键词数量不匹配，请确保 MONITOR_USER_ID 和 MONITOR_BOT_TOKEN 中的项数相同。"
   exit 1
 fi
 
