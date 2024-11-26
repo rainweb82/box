@@ -10,9 +10,9 @@ CHAT_ID=${YGN_USER_IDS}                                                        #
 INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
 FAIL_COUNT=${FAIL_COUNT:-3}                                                    # 连续错误触发通知次数，默认3次
 CUMULATIVE_FAIL=${CUMULATIVE_FAIL:-5}                                          # 累计错误触发通知次数，默认5次
+ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}                                       # 如果未设置，则为空字符串
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
-ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}  # 如果未设置，则为空字符串
 
 
 # 检查环境变量是否设置
@@ -146,35 +146,33 @@ get_ip_info() {
 # 发送 Telegram 通知的函数
 send_telegram_notification() {
   local message=$1
-  local domain=$2  # 接收域名参数
+  local domain=$2
   local force_send=${3:-false}  # 第二个参数控制是否强制发送
-
   # 检查是否填写 BOT_TOKEN 和 CHAT_ID
   if [[ -z "$BOT_TOKEN_ARRAY" || -z "$CHAT_ID_ARRAY" ]]; then
     echo "未填写 BOT_TOKEN 或 CHAT_ID，无法发送 Telegram 通知。"
     return
   fi
   
-  # 如果不是强制发送，检查域名是否符合允许的后缀
-  if [[ "$force_send" == "false" ]]; then
-    local domain=$(echo "$message" | grep -Eo 'https?://[^/]*' | sed 's|https\?://||g')
-
-    # 如果设置了后缀限制，执行判断逻辑
-    if [[ "${#ALLOWED_SUFFIX_ARRAY[@]}" -gt 0 ]]; then
-      local is_allowed=0
-      for suffix in "${ALLOWED_SUFFIX_ARRAY[@]}"; do
-        if [[ "$domain" == *".$suffix" ]]; then
-          is_allowed=1
-          break
+  # 如果未填写允许通知域名列表，则都可发送通知
+  if [[ -n "$ALLOWED_SUFFIXES" ]]; then
+    # 如果不是强制发送，检查域名是否符合允许的后缀
+    if [[ "$force_send" == "false" ]]; then
+        # 判断是否为允许的域名
+        local is_allowed=0
+        for suffix in "${ALLOWED_SUFFIX_ARRAY[@]}"; do
+            if [[ "$domain" == *".$suffix" ]]; then
+            is_allowed=1
+            break
+            fi
+        done
+        if [[ "$is_allowed" -eq 0 ]]; then
+            echo "检测到域名 '$domain' 不在允许通知列表中，跳过发送通知。"
+            return
         fi
-      done
-      if [[ $is_allowed -eq 0 ]]; then
-        echo "检测到域名 '$domain' 不符合允许的后缀，跳过发送通知。"
-        return
-      fi
     fi
   fi
-  
+
   local ip_info=$(get_ip_info)
   for ((j=0; j<${#BOT_TOKEN_ARRAY[@]}; j++)); do
   #echo "------------------------"
@@ -236,7 +234,7 @@ check_and_notify_new_domain() {
     # 如果是新域名且第一次发现，或超过半小时没有发送通知
     local domains_to_notify="${NEW_DOMAINS_TO_NOTIFY[*]}"
     NEW_DOMAINS_TO_NOTIFY=()  # 清空待通知列表
-    send_telegram_notification "【注意】: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。" "$domains_to_notify"
+    send_telegram_notification "【注意】: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。" "$domains_to_notify" true
     NEW_DOMAIN_NOTIFICATION_TIME[index]=$current_time  # 更新最后发送通知时间
   fi
 }
@@ -276,8 +274,8 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     printf "$(date +%H:%M:%S) 检查 URL$((i + 1)) ... | "
 
     # 获取最终跳转后的 URL 和网页内容
-    FINAL_URL=$(curl --max-time 30 -Ls -o /dev/null -w %{url_effective} "$URL")
-    content=$(curl --max-time 30 -s -L "$FINAL_URL")
+    FINAL_URL=$(curl --max-time 10 -Ls -o /dev/null -w %{url_effective} "$URL")
+    content=$(curl --max-time 10 -s -L "$FINAL_URL")
     NOW_DOMAIN=$(get_domain "$FINAL_URL")
 
     if echo "$content" | grep -q "$KEYWORD"; then
