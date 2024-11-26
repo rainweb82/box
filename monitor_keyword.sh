@@ -65,7 +65,6 @@ KEYWORD_PRESENT_COUNT=()
 KEYWORD_ABSENT_COUNT=()
 NEW_DOMAIN_NOTIFICATION_TIME=()
 NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
-CUMULATIVE_FAIL_COUNT=()  # 初始化累计失败计数数组
 RUN_TIME=$(date +%s)  # 记录脚本的启动时间
 MAX_RUNTIME=86300  # 设置24小时（86400秒）的运行时长
 
@@ -73,7 +72,6 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   KEYWORD_PRESENT_COUNT[i]=0
   KEYWORD_ABSENT_COUNT[i]=0
   NEW_DOMAIN_NOTIFICATION_TIME[i]=0
-  CUMULATIVE_FAIL_COUNT[i]=0  # 累计失败计数
 done
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
