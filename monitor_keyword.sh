@@ -14,6 +14,9 @@ ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}                                       #
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
+declare -A DOMAIN_FAIL_COUNT
+declare -A DOMAIN_CUMULATIVE_FAIL_COUNT
+declare -A DOMAIN_RECOVERY_NOTIFICATION_SENT
 
 # 检查环境变量是否设置
 if [[ -z "$URLS" || -z "$KEYWORDS" ]]; then
@@ -58,32 +61,19 @@ else
 fi
 
 # 初始化每个 URL 的失败计数、最终 URL 地址、每日统计计数和恢复通知标记
-FAIL_COUNT_ARRAY=()
-PREV_FINAL_URL_ARRAY=()
-INITIAL_CHECK_DONE=()
 KEYWORD_PRESENT_COUNT=()
 KEYWORD_ABSENT_COUNT=()
-KEYWORD_RECOVERY_NOTIFICATION_SENT=()
 NEW_DOMAIN_NOTIFICATION_TIME=()
-DAILY_NOTIFICATION_SENT=0  # 标志变量，记录是否已发送当日统计
-LAST_NOTIFICATION_DATE=""  # 记录上次发送统计通知的日期
-STARTUP_DONE=0  # 标志是否为脚本首次启动
 NEW_DOMAINS_TO_NOTIFY=()  # 存储新发现的域名
 CUMULATIVE_FAIL_COUNT=()  # 初始化累计失败计数数组
 RUN_TIME=$(date +%s)  # 记录脚本的启动时间
 MAX_RUNTIME=86300  # 设置24小时（86400秒）的运行时长
-RECOVERY_NOTIFICATION_SENT_BY_DOMAIN=()  # 恢复通知标志（按域名区分）
 
 for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
-  FAIL_COUNT_ARRAY[i]=0
-  PREV_FINAL_URL_ARRAY[i]=""
-  INITIAL_CHECK_DONE[i]=0
   KEYWORD_PRESENT_COUNT[i]=0
   KEYWORD_ABSENT_COUNT[i]=0
-  KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=0
   NEW_DOMAIN_NOTIFICATION_TIME[i]=0
   CUMULATIVE_FAIL_COUNT[i]=0  # 累计失败计数
-  RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]=""
 done
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
@@ -234,6 +224,7 @@ check_and_notify_new_domain() {
     # 如果是新域名且第一次发现，或超过半小时没有发送通知
     local domains_to_notify="${NEW_DOMAINS_TO_NOTIFY[*]}"
     NEW_DOMAINS_TO_NOTIFY=()  # 清空待通知列表
+    echo "检测到新的域名 '$domains_to_notify，发送 Telegram 通知..."
     send_telegram_notification "【注意】: 检测到新的域名 '$domains_to_notify'，请手动更新已知域名列表。" "$domains_to_notify" true
     NEW_DOMAIN_NOTIFICATION_TIME[index]=$current_time  # 更新最后发送通知时间
   fi
@@ -260,9 +251,9 @@ while true; do
   current_time=$(date +%s)
   runtime=$((current_time - RUN_TIME))
   if [ "$runtime" -ge "$MAX_RUNTIME" ]; then
+    echo "脚本即将结束，发送日报 Telegram 通知..."
     send_daily_summary  # 发送每日统计
     sleep "5"
-    echo "脚本已运行24小时，自动结束进程。请等待定时任务自动重启进程。"
     exit 0
   fi
 
@@ -280,39 +271,35 @@ start_time=$(date +%s)  # 记录当前时间（秒）
 
     if echo "$content" | grep -q "$KEYWORD"; then
       echo "关键词 '$KEYWORD' 存在于 $NOW_DOMAIN 的页面中。"
-      FAIL_COUNT_ARRAY[i]=0  # 重置计数器
-      KEYWORD_PRESENT_COUNT[i]=$((KEYWORD_PRESENT_COUNT[i] + 1))  # 有关键词计数
+      # 关键词存在，重置对应域名的计数器
+      DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0
       
-      # 检查是否需要发送恢复通知（按域名）
-      if [[ "${RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]}" == *"$NOW_DOMAIN"* ]]; then
-        send_telegram_notification "【恢复】: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。" "$NOW_DOMAIN"
-        # 从恢复通知标志中移除当前域名
-        RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]=$(echo "${RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]}" | sed "s/$NOW_DOMAIN,//g")
-      fi
+        # 检查是否需要发送恢复通知
+        if [[ "${DOMAIN_RECOVERY_NOTIFICATION_SENT[$NOW_DOMAIN]}" == 1 ]]; then
+            echo "$NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到，发送 Telegram 通知..."
+            send_telegram_notification "【恢复】: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。" "$NOW_DOMAIN"
+            DOMAIN_RECOVERY_NOTIFICATION_SENT["$NOW_DOMAIN"]=0
+        fi
     else
       echo "[警告]: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
-      FAIL_COUNT_ARRAY[i]=$((FAIL_COUNT_ARRAY[i] + 1))  # 增加计数器
-      CUMULATIVE_FAIL_COUNT[i]=$((CUMULATIVE_FAIL_COUNT[i] + 1))  # 增加累计失败计数
-      KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
+      # 增加域名计数器
+      DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_FAIL_COUNT["$NOW_DOMAIN"] + 1))
+      DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"] + 1))
 
-      # 检查是否连续 3 次失败
-      if [ "${FAIL_COUNT_ARRAY[i]}" -ge $FAIL_COUNT ]; then
-        echo "连续 $FAIL_COUNT 次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 $FAIL_COUNT 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
+      # 检查连续失败次数
+      if [[ "${DOMAIN_FAIL_COUNT[$NOW_DOMAIN]}" -ge $FAIL_COUNT ]]; then
+          echo "$NOW_DOMAIN 已连续 $FAIL_COUNT 次检测不到关键词，发送 Telegram 通知..."
+          send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 ${FAIL_COUNT} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
+          DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置连续计数
+          DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计计数
+          DOMAIN_RECOVERY_NOTIFICATION_SENT["$NOW_DOMAIN"]=1  # 标记需要发送恢复通知
       fi
 
-      # 检查是否累计 5 次失败
-      if [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge $CUMULATIVE_FAIL ]; then
-        echo "累计 $CUMULATIVE_FAIL 次检测不到关键词，发送 Telegram 通知..."
-        send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 $CUMULATIVE_FAIL 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
-      fi
-
-      # 发送通知后重置计数
-      if [ "${FAIL_COUNT_ARRAY[i]}" -ge $FAIL_COUNT ] || [ "${CUMULATIVE_FAIL_COUNT[i]}" -ge $CUMULATIVE_FAIL ]; then
-        FAIL_COUNT_ARRAY[i]=0  # 发送通知后重置计数器
-        CUMULATIVE_FAIL_COUNT[i]=0  # 发送通知后重置累计失败计数器
-        KEYWORD_RECOVERY_NOTIFICATION_SENT[i]=1  # 标记为已发送无关键词通知
-        RECOVERY_NOTIFICATION_SENT_BY_DOMAIN[i]+="$NOW_DOMAIN,"
+      # 检查累计失败次数
+      if [[ "${DOMAIN_CUMULATIVE_FAIL_COUNT[$NOW_DOMAIN]}" -ge $CUMULATIVE_FAIL ]]; then
+          echo "$NOW_DOMAIN 已累计 $CUMULATIVE_FAIL 次检测不到关键词，发送 Telegram 通知..."
+          send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 ${CUMULATIVE_FAIL} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
+          DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计计数
       fi
     fi
 
@@ -336,3 +323,4 @@ start_time=$(date +%s)  # 记录当前时间（秒）
   # 等待指定的时间间隔
   sleep "$total_wait_time"  # 等待调整后的时间
 done
+
