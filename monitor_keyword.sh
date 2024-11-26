@@ -166,7 +166,7 @@ send_telegram_notification() {
             fi
         done
         if [[ "$is_allowed" -eq 0 ]]; then
-            echo "检测到域名 '$domain' 不在允许通知列表中，跳过发送通知。"
+            echo "$domain 不在允许通知列表中，跳过发送通知。"
             return
         fi
     fi
