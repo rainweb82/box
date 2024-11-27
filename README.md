@@ -19,8 +19,8 @@
 3. **`INTERVAL`**：检测时间间隔，单位为秒，默认为 60 秒。
 4. **`DAILY_NOTIFICATION_TIME`**：每日通知时间，格式为 `"HH:MM"`，默认为每天上午 11:00。
 6. **`ALLOWED_SUFFIXES`**：允许发送通知的域名结尾（例如 com cn），可以设置多个（换行分隔），不填写默认都允许发送通知。
-5. **`BOT_TOKEN`**：Telegram 机器人的 API Token，可以设置多个（换行分隔）。
-6. **`CHAT_ID`**：接收通知的 Telegram 用户 ID，可以设置多个（换行分隔）。
+5. **`MONITOR_BOT_TOKENS`**：Telegram 机器人的 API Token，可以设置多个（换行分隔）。
+6. **`MONITOR_USER_IDS`**：接收通知的 Telegram 用户 ID，可以设置多个（换行分隔）。
 
 **注意**：
 - 请确保 `URLS` 和 `KEYWORDS` 数量一致。
