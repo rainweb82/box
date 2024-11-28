@@ -280,6 +280,7 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       echo "关键词 '$KEYWORD' 存在于 $NOW_DOMAIN 的页面中。"
       # 关键词存在，重置对应域名的计数器
       DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0
+      KEYWORD_PRESENT_COUNT[i]=$((KEYWORD_PRESENT_COUNT[i] + 1))  # 有关键词计数
       
         # 检查是否需要发送恢复通知
         if [[ "${DOMAIN_RECOVERY_NOTIFICATION_SENT[$NOW_DOMAIN]}" == 1 ]]; then
@@ -292,6 +293,7 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       # 增加域名计数器
       DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_FAIL_COUNT["$NOW_DOMAIN"] + 1))
       DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"] + 1))
+      KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
 
       # 检查连续失败次数
       if [[ "${DOMAIN_FAIL_COUNT[$NOW_DOMAIN]}" -ge $FAIL_COUNT ]]; then
