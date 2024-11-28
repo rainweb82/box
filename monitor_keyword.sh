@@ -279,8 +279,8 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     if echo "$content" | grep -q "$KEYWORD"; then
       echo "关键词 '$KEYWORD' 存在于 $NOW_DOMAIN 的页面中。"
       # 关键词存在，重置对应域名的计数器
-      DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0
-      KEYWORD_PRESENT_COUNT[i]=$((KEYWORD_PRESENT_COUNT[i] + 1))  # 有关键词计数
+      DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置连续无关键词计数
+      KEYWORD_PRESENT_COUNT[i]=$((KEYWORD_PRESENT_COUNT[i] + 1))  # 增加有关键词计数
       
         # 检查是否需要发送恢复通知
         if [[ "${DOMAIN_RECOVERY_NOTIFICATION_SENT[$NOW_DOMAIN]}" == 1 ]]; then
@@ -291,16 +291,16 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     else
       echo "[警告]: 关键词 '$KEYWORD' 不存在于 $NOW_DOMAIN 的页面中。"
       # 增加域名计数器
-      DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_FAIL_COUNT["$NOW_DOMAIN"] + 1))
-      DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"] + 1))
-      KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 无关键词计数
+      DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_FAIL_COUNT["$NOW_DOMAIN"] + 1))  # 增加连续无关键词计数
+      DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=$((DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"] + 1))  # 增加累计无关键词计数
+      KEYWORD_ABSENT_COUNT[i]=$((KEYWORD_ABSENT_COUNT[i] + 1))  # 增加无关键词计数
 
       # 检查连续失败次数
       if [[ "${DOMAIN_FAIL_COUNT[$NOW_DOMAIN]}" -ge $FAIL_COUNT ]]; then
           echo "$NOW_DOMAIN 已连续 $FAIL_COUNT 次检测不到关键词，发送 Telegram 通知..."
           send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 ${FAIL_COUNT} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
-          DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置连续计数
-          DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计计数
+          DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置连续无关键词计数
+          DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计无关键词计数
           DOMAIN_RECOVERY_NOTIFICATION_SENT["$NOW_DOMAIN"]=1  # 标记需要发送恢复通知
       fi
 
@@ -308,7 +308,7 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       if [[ "${DOMAIN_CUMULATIVE_FAIL_COUNT[$NOW_DOMAIN]}" -ge $CUMULATIVE_FAIL ]]; then
           echo "$NOW_DOMAIN 已累计 $CUMULATIVE_FAIL 次检测不到关键词，发送 Telegram 通知..."
           send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 ${CUMULATIVE_FAIL} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
-          DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计计数
+          DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计无关键词计数
       fi
     fi
 
