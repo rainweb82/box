@@ -232,6 +232,7 @@ update_known_domains_list() {
 
 # 持续监测每个 URL 的关键词和最终地址变化
 while true; do
+start_time=$(date +%s)  # 记录当前时间（秒）
   # 检查是否超过24小时
   current_time=$(date +%s)
   runtime=$((current_time - RUN_TIME))
@@ -242,7 +243,6 @@ while true; do
     exit 0
   fi
 
-start_time=$(date +%s)  # 记录当前时间（秒）
   for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
     URL=${URL_ARRAY[i]}
     KEYWORD=${KEYWORD_ARRAY[i]}
@@ -300,13 +300,11 @@ start_time=$(date +%s)  # 记录当前时间（秒）
   # 计算等待时间，确保每次间隔是准确的
   end_time=$(date +%s)
   elapsed_time=$((end_time - start_time))  # 计算所用时间
-
   total_wait_time=$((INTERVAL - elapsed_time))   # 默认间隔减去每次检测所用时间，避免总的等待时间过长
   # 如果所花时间超过设定的间隔（极少情况下发生），可以设置一个最小的等待时间，比如 1 秒
   if [[ $total_wait_time -le 0 ]]; then
     total_wait_time=1
   fi
-
   # 等待指定的时间间隔
   sleep "$total_wait_time"  # 等待调整后的时间
 done
