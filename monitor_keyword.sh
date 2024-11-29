@@ -232,7 +232,7 @@ update_known_domains_list() {
 
 # 持续监测每个 URL 的关键词和最终地址变化
 while true; do
-start_time=$(date +%s)  # 记录当前时间（秒）
+  start_time=$(date +%s)  # 记录当前时间（秒）
   # 检查是否超过24小时
   current_time=$(date +%s)
   runtime=$((current_time - RUN_TIME))
