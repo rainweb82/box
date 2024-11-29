@@ -283,7 +283,7 @@ start_time=$(date +%s)  # 记录当前时间（秒）
       KEYWORD_PRESENT_COUNT[i]=$((KEYWORD_PRESENT_COUNT[i] + 1))  # 增加有关键词计数
       
         # 检查是否需要发送恢复通知
-        if [[ "${DOMAIN_RECOVERY_NOTIFICATION_SENT[$NOW_DOMAIN]}" == 1 ]]; then
+        if [[ "${DOMAIN_RECOVERY_NOTIFICATION_SENT[$NOW_DOMAIN]}" -eq 1 ]]; then
             echo "$NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到，发送 Telegram 通知..."
             send_telegram_notification "【恢复】: $NOW_DOMAIN 的关键词 '$KEYWORD' 已重新检测到。" "$NOW_DOMAIN"
             DOMAIN_RECOVERY_NOTIFICATION_SENT["$NOW_DOMAIN"]=0
