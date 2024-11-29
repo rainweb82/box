@@ -83,11 +83,21 @@ formatted_response=$(echo "$response" | jq -r '[
   "地区: " + (.region // "未知"),
   "运营商: " + (.org // "未知")
 ] | .[]')
-
 # 输出查询结果
 echo "当前 IP 归属地信息: "
 echo "$formatted_response"
 echo ""
+
+ip=$(echo "$response" | jq -r '.ip')
+# 替换 IP 地址的最后一段为 "*"
+masked_ip=$(echo "$ip" | awk -F. '{print $1"."$2"."$3".*"}')
+formatted_response=$(echo "$response" | jq -r --arg masked_ip "$masked_ip" '[
+  "IP地址: " + $masked_ip,
+  "国家: " + .country,
+  "城市: " + (.city // "未知"),
+  "地区: " + (.region // "未知"),
+  "运营商: " + (.org // "未知")
+] | .[]')
 
 # 输出当前检测的域名
 echo "即将检测的 URL 和对应的域名: "
@@ -123,23 +133,6 @@ get_domain() {
   fi
 }
 
-get_ip_info() {
-
-  local response=$(curl --max-time 30 -s https://ipinfo.io)
-  local ip=$(echo "$response" | jq -r '.ip')
-  # 替换 IP 地址的最后一段为 "*"
-  local masked_ip=$(echo "$ip" | awk -F. '{print $1"."$2"."$3".*"}')
-
-  local formatted_response=$(echo "$response" | jq -r --arg masked_ip "$masked_ip" '[
-    "IP地址: " + $masked_ip,
-    "国家: " + .country,
-    "城市: " + (.city // "未知"),
-    "地区: " + (.region // "未知"),
-    "运营商: " + (.org // "未知")
-  ] | .[]')
-  echo "$formatted_response"
-}
-
 # 发送 Telegram 通知的函数
 send_telegram_notification() {
   local message=$1
@@ -170,20 +163,13 @@ send_telegram_notification() {
     fi
   fi
 
-  local ip_info=$(get_ip_info)
   for ((j=0; j<${#BOT_TOKEN_ARRAY[@]}; j++)); do
-  #echo "------------------------"
-  #echo "$message"
-  #echo
-  #echo "当前 IP 归属地信息: "
-  #echo "$ip_info"
-  #echo "------------------------"
   curl -s --max-time 30 -o /dev/null -X POST "https://api.telegram.org/bot${BOT_TOKEN_ARRAY[j]}/sendMessage" \
        -d chat_id="${CHAT_ID_ARRAY[j]}" \
        -d text="$message
 
 当前 IP 归属地信息: 
-$ip_info"
+echo $formatted_response"
   done   
 }
 
@@ -272,8 +258,8 @@ start_time=$(date +%s)  # 记录当前时间（秒）
     printf "$(date +%H:%M:%S) 检查 URL$((i + 1)) ... | "
 
     # 获取最终跳转后的 URL 和网页内容
-    FINAL_URL=$(curl --max-time 10 -Ls -o /dev/null -w %{url_effective} "$URL")
-    content=$(curl --max-time 10 -s -L "$FINAL_URL")
+    content=$(curl --max-time 10 -s -L -w '\n%{url_effective}' "$URL")
+    FINAL_URL=$(echo "$content" | tail -n 1)
     NOW_DOMAIN=$(get_domain "$FINAL_URL")
 
     if echo "$content" | grep -q "$KEYWORD"; then
