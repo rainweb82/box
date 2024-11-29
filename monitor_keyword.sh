@@ -76,18 +76,6 @@ done
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
 response=$(curl --max-time 30 -s https://ipinfo.io)
-formatted_response=$(echo "$response" | jq -r '[
-  "IP地址: " + .ip,
-  "国家: " + .country,
-  "城市: " + (.city // "未知"),
-  "地区: " + (.region // "未知"),
-  "运营商: " + (.org // "未知")
-] | .[]')
-# 输出查询结果
-echo "当前 IP 归属地信息: "
-echo "$formatted_response"
-echo ""
-
 ip=$(echo "$response" | jq -r '.ip')
 # 替换 IP 地址的最后一段为 "*"
 masked_ip=$(echo "$ip" | awk -F. '{print $1"."$2"."$3".*"}')
@@ -98,6 +86,10 @@ formatted_response=$(echo "$response" | jq -r --arg masked_ip "$masked_ip" '[
   "地区: " + (.region // "未知"),
   "运营商: " + (.org // "未知")
 ] | .[]')
+# 输出查询结果
+echo "当前 IP 归属地信息: "
+echo "$formatted_response"
+echo ""
 
 # 输出当前检测的域名
 echo "即将检测的 URL 和对应的域名: "
