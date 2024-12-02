@@ -161,7 +161,7 @@ send_telegram_notification() {
        -d text="$message
 
 当前 IP 归属地信息: 
-echo $formatted_response"
+$formatted_response"
   done   
 }
 
