@@ -276,7 +276,7 @@ while true; do
       # 检查连续失败次数
       if [[ "${DOMAIN_FAIL_COUNT[$NOW_DOMAIN]}" -ge $FAIL_COUNT ]]; then
           echo "$NOW_DOMAIN 已连续 $FAIL_COUNT 次检测不到关键词，发送 Telegram 通知..."
-          send_telegram_notification "【严重问题】: $NOW_DOMAIN 连续 ${FAIL_COUNT} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
+          send_telegram_notification "【提醒】: $NOW_DOMAIN 连续 ${FAIL_COUNT} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
           DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置连续无关键词计数
           DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计无关键词计数
           DOMAIN_RECOVERY_NOTIFICATION_SENT["$NOW_DOMAIN"]=1  # 标记需要发送恢复通知
@@ -285,7 +285,7 @@ while true; do
       # 检查累计失败次数
       if [[ "${DOMAIN_CUMULATIVE_FAIL_COUNT[$NOW_DOMAIN]}" -ge $CUMULATIVE_FAIL ]]; then
           echo "$NOW_DOMAIN 已累计 $CUMULATIVE_FAIL 次检测不到关键词，发送 Telegram 通知..."
-          send_telegram_notification "【提醒】: $NOW_DOMAIN 累计 ${CUMULATIVE_FAIL} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
+          send_telegram_notification "【注意】: $NOW_DOMAIN 累计 ${CUMULATIVE_FAIL} 次检测不到关键词 '$KEYWORD'。" "$NOW_DOMAIN"
           DOMAIN_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置连续无关键词计数
           DOMAIN_CUMULATIVE_FAIL_COUNT["$NOW_DOMAIN"]=0  # 重置累计无关键词计数
       fi
