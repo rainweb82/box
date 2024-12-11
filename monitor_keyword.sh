@@ -10,8 +10,9 @@ CHAT_ID=${MONITOR_USER_IDS}                                                    #
 INTERVAL=${INTERVAL:-60}                                                       # 默认检查间隔为60秒
 FAIL_COUNT=${FAIL_COUNT:-3}                                                    # 连续错误触发通知次数，默认3次
 CUMULATIVE_FAIL=${CUMULATIVE_FAIL:-5}                                          # 累计错误触发通知次数，默认5次
-ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}                                       # 如果未设置，则为空字符串
+ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}                                       # 允许发送通知的域名列表
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
+ENABLE_NEW_DOMAIN_NOTIFICATION=${ENABLE_NEW_DOMAIN_NOTIFICATION:-true}         # 新域名是否发送通知，默认关闭
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
 declare -A DOMAIN_FAIL_COUNT
@@ -73,6 +74,11 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   KEYWORD_ABSENT_COUNT[i]=0
   NEW_DOMAIN_NOTIFICATION_TIME[i]=0
 done
+
+# 新域名通知开关状态提醒
+if [[ "$ENABLE_NEW_DOMAIN_NOTIFICATION" != "true" ]]; then
+  echo "新域名通知功能已被关闭，跳过所有新域名检测。"
+fi
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
 response=$(curl --max-time 30 -s https://ipinfo.io)
@@ -180,6 +186,9 @@ send_daily_summary() {
 
 # 检查是否存在不在域名列表中的新域名
 check_and_notify_new_domain() {
+  if [[ "$ENABLE_NEW_DOMAIN_NOTIFICATION" != "true" ]]; then
+    return
+  fi
   local index=$1
   local current_domain=$2
   local current_time=$(date +%s)
@@ -297,6 +306,8 @@ while true; do
       update_known_domains_list  # 更新已知域名列表
     fi
   done
+  
+echo "调试信息: 当前域名: $NOW_DOMAIN 连续失败计数: ${DOMAIN_FAIL_COUNT[$NOW_DOMAIN]} 累计失败计数: ${DOMAIN_CUMULATIVE_FAIL_COUNT[$NOW_DOMAIN]}"
 
   # 计算等待时间，确保每次间隔是准确的
   end_time=$(date +%s)
