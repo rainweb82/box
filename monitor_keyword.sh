@@ -12,7 +12,7 @@ FAIL_COUNT=${FAIL_COUNT:-3}                                                    #
 CUMULATIVE_FAIL=${CUMULATIVE_FAIL:-5}                                          # 累计错误触发通知次数，默认5次
 ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}                                       # 允许发送通知的域名列表
 NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
-ENABLE_NEW_DOMAIN_NOTIFICATION=${ENABLE_NEW_DOMAIN_NOTIFICATION:-true}         # 新域名是否发送通知，默认关闭
+ENABLE_NEW_DOMAIN_NOTIFICATION=${ENABLE_NEW_DOMAIN_NOTIFICATION:-false}        # 新域名是否发送通知，默认关闭
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
 declare -A DOMAIN_FAIL_COUNT
@@ -44,9 +44,9 @@ readarray -t CHAT_ID_ARRAY <<< "$CHAT_ID"
 readarray -t BOT_TOKEN_ARRAY <<< "$BOT_TOKEN"
 readarray -t ALLOWED_SUFFIX_ARRAY <<< "$ALLOWED_SUFFIXES"  # 将后缀转换为数组
 
-# 检查是否存在 known_domains.txt 文件
-if [[ ! -f "$KNOWN_DOMAINS_FILE" ]]; then
-  echo "警告: 文件 $KNOWN_DOMAINS_FILE 不存在，将跳过新域名的检测。"
+# 新域名通知开关状态提醒
+if [[ "$ENABLE_NEW_DOMAIN_NOTIFICATION" != "true" ]]; then
+  echo "新域名通知功能已被关闭，跳过所有新域名检测。"
   echo ""
   CHECK_NEW_DOMAINS_ENABLED=0  # 标志为不执行新域名检测
 else
@@ -74,11 +74,6 @@ for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
   KEYWORD_ABSENT_COUNT[i]=0
   NEW_DOMAIN_NOTIFICATION_TIME[i]=0
 done
-
-# 新域名通知开关状态提醒
-if [[ "$ENABLE_NEW_DOMAIN_NOTIFICATION" != "true" ]]; then
-  echo "新域名通知功能已被关闭，跳过所有新域名检测。"
-fi
 
 # 使用公共 API 查询当前 IP 地址和归属地信息，并格式化输出
 response=$(curl --max-time 30 -s https://ipinfo.io)
