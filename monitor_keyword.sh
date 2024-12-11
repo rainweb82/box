@@ -11,8 +11,8 @@ INTERVAL=${INTERVAL:-60}                                                       #
 FAIL_COUNT=${FAIL_COUNT:-3}                                                    # 连续错误触发通知次数，默认3次
 CUMULATIVE_FAIL=${CUMULATIVE_FAIL:-5}                                          # 累计错误触发通知次数，默认5次
 ALLOWED_SUFFIXES=${ALLOWED_SUFFIXES:-""}                                       # 允许发送通知的域名列表
-NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 ENABLE_NEW_DOMAIN_NOTIFICATION=${ENABLE_NEW_DOMAIN_NOTIFICATION:-false}        # 新域名是否发送通知，默认关闭
+NEW_DOMAIN_NOTIFICATION_INTERVAL=${NEW_DOMAIN_NOTIFICATION_INTERVAL:-1800}     # 新域名通知间隔时间，默认30分钟
 KNOWN_DOMAINS_FILE="known_domains.txt"                                         # 已知最终跳转域名列表（用换行分隔）
 
 declare -A DOMAIN_FAIL_COUNT
