@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cron:0 0 11 * * *
+# cron:0 0 10 * * *
 # new Env("域名检测任务")
 
 # 从环境变量中读取多个 URL 和关键词
@@ -301,8 +301,6 @@ while true; do
       update_known_domains_list  # 更新已知域名列表
     fi
   done
-  
-echo "调试信息: 当前域名: $NOW_DOMAIN 连续失败计数: ${DOMAIN_FAIL_COUNT[$NOW_DOMAIN]} 累计失败计数: ${DOMAIN_CUMULATIVE_FAIL_COUNT[$NOW_DOMAIN]}"
 
   # 计算等待时间，确保每次间隔是准确的
   end_time=$(date +%s)
