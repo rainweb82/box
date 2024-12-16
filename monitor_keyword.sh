@@ -173,6 +173,7 @@ send_daily_summary() {
   for ((i=0; i<${#URL_ARRAY[@]}; i++)); do
     message+="第 $((i + 1)) 个 URL ${URL_ARRAY[i]}
 监测到关键词: ${KEYWORD_PRESENT_COUNT[i]} 次，未检测到关键词: ${KEYWORD_ABSENT_COUNT[i]} 次"
+    echo message+="第 $((i + 1)) 个 URL ${URL_ARRAY[i]} 监测到关键词: ${KEYWORD_PRESENT_COUNT[i]} 次，未检测到关键词: ${KEYWORD_ABSENT_COUNT[i]} 次"
     KEYWORD_PRESENT_COUNT[i]=0  # 重置计数
     KEYWORD_ABSENT_COUNT[i]=0    # 重置计数
   done
